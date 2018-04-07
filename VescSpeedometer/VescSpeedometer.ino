@@ -90,7 +90,7 @@ void setup() {
   pinMode(VBAT_PIN, INPUT);
   readVBAT();
   oled.setUnits(_imperial);
-
+  
   _sendNewRequest = true;
   
   oled.display();
@@ -114,12 +114,17 @@ void loop() {
         }
       }
     }
+    else
     {
+      _sendNewRequest = true;
+      oled.setSpeed(0);
       oled.setConnected(false);
     }
   }
   else
   {
+    _sendNewRequest = true;
+    oled.setSpeed(0);
     oled.setConnected(false);
   }
     // Get a raw ADC reading
@@ -134,20 +139,20 @@ void loop() {
   //drawSpeed(0.0);
   //setBTConnected(true);
 
-  oled.setSpeed(52.7f);
+  //oled.setSpeed(52.7f);
   oled.setBattery(vbat_mv/1000);
   oled.display();
 
-  delay(500);
+  delay(200);
 }
 
-float rpmToSpeed(float rpm)
+float erpmToSpeed(int erpm)
 {
   float circ = WHEEL_DIAMETER * 3.1415926535; //pi
-  float mmph = GEAR_RATIO * 60 * circ;
+  float mmph = GEAR_RATIO * 60 * circ * erpm / 7.0f; //divide by 7 to convert erpm to rpm
   if(_imperial)
   {
-    return mmph / 1609340.0f;  //mm to miles
+    return mmph / 1609344.0f;  //mm to miles
   }
   else
   {
@@ -358,30 +363,31 @@ void bleuart_rx_callback(BLEClientUart& uart_svc)
         totalBytesRead += bytesRead;
          continue;
       }
-      //location of rpm is 23 bytes into the actual data packet, and is 4 bytes long
-      else if (totalBytesRead + bytesRead >= headerLen + 23 && !foundRPM)
+      //location of rpm is 25 bytes into the actual data packet, and is 4 bytes long
+      else if (totalBytesRead + bytesRead >= headerLen + 25 && !foundRPM)
       {
         foundRPM = true;
-        int index = headerLen + 23 - totalBytesRead;
-        Serial.print(index);
-        Serial.print(" ");
-        int rpm = (int)(vescResponseData[index++]) << 24 + (int)(vescResponseData[index++]) << 16 + 
-                  (int)(vescResponseData[index++]) << 8 + (int)(vescResponseData[index]);
-        Serial.print(rpm);
-        Serial.print(" rpm ");
-        Serial.print(rpmToSpeed(rpm));
-        Serial.print(" mph");
-        //oled.setSpeed(rpmToSpeed(rpm);
+        
+        int index = headerLen + 25 - totalBytesRead;
+        int rpm = (vescResponseData[index++]) << 24 | (vescResponseData[index++]) << 16 | 
+                  (vescResponseData[index++]) << 8 | (vescResponseData[index]);
+        if(rpm >= 0)
+        {
+          oled.setSpeed(erpmToSpeed(rpm));
+        }
       }
       else if(totalBytesRead + bytesRead >= vescPacketLen + headerLen + 3)
       {
-        Serial.print(" end? ");
         int index = vescPacketLen + headerLen + 2 - totalBytesRead;
         //found the end data
         if(vescResponseData[index] == 3)
         {
           Serial.print(" foundEND ");
-          //_sendNewRequest = true;
+          char buff[6 + 1] = {0};
+          if(buildGetValuesPacket(buff, 6))
+          {
+            clientUart.print( buff );
+          }
           foundStart = false;
           totalBytesRead = 0;
           vescPacketLen = 0;
