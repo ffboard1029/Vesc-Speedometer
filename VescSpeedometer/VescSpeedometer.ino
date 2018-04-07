@@ -26,7 +26,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
  */
 
-
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
@@ -80,45 +79,34 @@ void setup() {
   Serial.begin(9600);
   
   _imperial = DISPLAY_IMPERIAL_UNITS;
+  _sendNewRequest = true;
   
   bleCentralSetup();
 
   // Setup the OLED display
   oled.init();
   oled.clearDisplay();
+  oled.setUnits(_imperial);
+  oled.display();
 
   pinMode(VBAT_PIN, INPUT);
   readVBAT();
-  oled.setUnits(_imperial);
-  
-  _sendNewRequest = true;
-  
-  oled.display();
 }
 
 void loop() {
   
-  if ( Bluefruit.Central.connected() )
+  if ( Bluefruit.Central.connected() && clientUart.discovered())
   {
-    // Not discovered yet
-    if ( clientUart.discovered() )
+    oled.setConnected(true);
+    //for startup, once inside the callback it will re-send the data itself
+    if ( _sendNewRequest)
     {
-      oled.setConnected(true);
-      if ( _sendNewRequest)
+      char buff[6 + 1] = {0};
+      if(buildGetValuesPacket(buff, 6))
       {
-        char buff[6 + 1] = {0};
-        if(buildGetValuesPacket(buff, 6))
-        {
-          clientUart.print( buff );
-          _sendNewRequest = false;
-        }
+        clientUart.print( buff );
+        _sendNewRequest = false;
       }
-    }
-    else
-    {
-      _sendNewRequest = true;
-      oled.setSpeed(0);
-      oled.setConnected(false);
     }
   }
   else
@@ -127,7 +115,7 @@ void loop() {
     oled.setSpeed(0);
     oled.setConnected(false);
   }
-    // Get a raw ADC reading
+  // Get a raw ADC reading
   int vbat_raw = readVBAT();
 
   // Convert the raw value to compensated mv, taking the resistor-
@@ -136,10 +124,6 @@ void loop() {
   // VBAT voltage divider is 2M + 0.806M, which needs to be added back
   float vbat_mv = (float)vbat_raw * VBAT_MV_PER_LSB * VBAT_DIVIDER_COMP;
 
-  //drawSpeed(0.0);
-  //setBTConnected(true);
-
-  //oled.setSpeed(52.7f);
   oled.setBattery(vbat_mv/1000);
   oled.display();
 
@@ -170,12 +154,110 @@ bool buildGetValuesPacket(char * buff, int len)
   buff[1] = 1;  //packet length, one byte for short packets 2 bytes for long packets
   buff[2] = COMM_GET_VALUES;  //the packet data
 
-  //checksum
+  //2 byte checksum
   short checksum = crc16((unsigned char *)buff + 2, 1);
   buff[3] = (char)(checksum >> 8);
   buff[4] = (char)(checksum & 0xFF);
   buff[5] = 3; //stop byte
   return true;
+}
+
+//these are global, but are only used in the below function.
+bool foundStart = false;
+int vescPacketLen = 0;
+int totalBytesRead = 0;
+bool foundRPM = false;
+
+/**
+ * Callback invoked when uart received data
+ */
+void bleuart_rx_callback(BLEClientUart& uart_svc)
+{
+  uint8_t vescResponseData[64] = {0};
+  Serial.print("[RX]: ");
+  
+  while ( uart_svc.available() )
+  {
+    
+    int bytesRead = uart_svc.read(vescResponseData, 64);
+    Serial.print("bytes read: ");
+    Serial.print(bytesRead);
+    if(!foundStart)
+    {
+      if(vescResponseData[0] == 2)
+      {
+        Serial.print(" len:");
+        vescPacketLen = vescResponseData[1];
+        Serial.print(vescPacketLen);
+        foundStart = true;
+      }
+      else if(vescResponseData[0] == 3)
+      {
+        vescPacketLen = vescResponseData[1] << 8 + vescResponseData[2];
+        foundStart = true;
+      }
+      else
+      {
+        Serial.print(" not vesc data?? or some other error...... :/");
+        totalBytesRead += bytesRead;
+        continue;
+      }
+    }
+
+    if(foundStart)
+    {
+      int headerLen = 2;
+      if(vescPacketLen > 256)
+      {
+        headerLen = 3;
+      }
+      if(totalBytesRead + bytesRead < headerLen + 23) // byte location for rpm
+      {
+        totalBytesRead += bytesRead;
+         continue;
+      }
+      //location of rpm is 25 bytes into the actual data packet, and is 4 bytes long
+      else if (totalBytesRead + bytesRead >= headerLen + 25 && !foundRPM)
+      {
+        foundRPM = true;
+        
+        int index = headerLen + 25 - totalBytesRead;
+        int rpm = (vescResponseData[index++]) << 24 | (vescResponseData[index++]) << 16 | 
+                  (vescResponseData[index++]) << 8 | (vescResponseData[index]);
+        if(rpm >= 0)
+        {
+          oled.setSpeed(erpmToSpeed(rpm));
+        }
+      }
+      else if(totalBytesRead + bytesRead >= vescPacketLen + headerLen + 3)
+      {
+        int index = vescPacketLen + headerLen + 2 - totalBytesRead;
+        //found the end data
+        if(vescResponseData[index] == 3)
+        {
+          Serial.print(" foundEND ");
+          char buff[6 + 1] = {0};
+          if(buildGetValuesPacket(buff, 6))
+          {
+            clientUart.print( buff );
+          }
+          foundStart = false;
+          totalBytesRead = 0;
+          vescPacketLen = 0;
+          foundRPM = false;
+          continue;
+        }
+        else
+        {
+          //keep going?? this should be an error case so huh...
+          totalBytesRead += bytesRead;
+          continue;
+        }
+      }
+    }
+    totalBytesRead += bytesRead;
+  }
+  Serial.println();
 }
 
 /*********************************************************************
@@ -306,104 +388,4 @@ void disconnect_callback(uint16_t conn_handle, uint8_t reason)
   (void) reason;
   
   Serial.println("Disconnected");
-}
-
-bool foundStart = false;
-int vescPacketLen = 0;
-int totalBytesRead = 0;
-bool foundRPM = false;
-
-/**
- * Callback invoked when uart received data
- * @param uart_svc Reference object to the service where the data 
- * arrived. In this example it is clientUart
- */
-void bleuart_rx_callback(BLEClientUart& uart_svc)
-{
-  uint8_t vescResponseData[64] = {0};
-  Serial.print("[RX]: ");
-  
-  while ( uart_svc.available() )
-  {
-    
-    int bytesRead = uart_svc.read(vescResponseData, 64);
-    Serial.print("bytes read: ");
-    Serial.print(bytesRead);
-    if(!foundStart)
-    {
-      if(vescResponseData[0] == 2)
-      {
-        Serial.print(" len:");
-        vescPacketLen = vescResponseData[1];
-        Serial.print(vescPacketLen);
-        foundStart = true;
-      }
-      else if(vescResponseData[0] == 3)
-      {
-        vescPacketLen = vescResponseData[1] << 8 + vescResponseData[2];
-        foundStart = true;
-      }
-      else
-      {
-        Serial.print(" not vesc data?? or some other error...... :/");
-        totalBytesRead += bytesRead;
-        continue;
-      }
-    }
-
-    if(foundStart)
-    {
-      int headerLen = 2;
-      if(vescPacketLen > 256)
-      {
-        headerLen = 3;
-      }
-      if(totalBytesRead + bytesRead < headerLen + 23) // byte location for rpm
-      {
-        totalBytesRead += bytesRead;
-         continue;
-      }
-      //location of rpm is 25 bytes into the actual data packet, and is 4 bytes long
-      else if (totalBytesRead + bytesRead >= headerLen + 25 && !foundRPM)
-      {
-        foundRPM = true;
-        
-        int index = headerLen + 25 - totalBytesRead;
-        int rpm = (vescResponseData[index++]) << 24 | (vescResponseData[index++]) << 16 | 
-                  (vescResponseData[index++]) << 8 | (vescResponseData[index]);
-        if(rpm >= 0)
-        {
-          oled.setSpeed(erpmToSpeed(rpm));
-        }
-      }
-      else if(totalBytesRead + bytesRead >= vescPacketLen + headerLen + 3)
-      {
-        int index = vescPacketLen + headerLen + 2 - totalBytesRead;
-        //found the end data
-        if(vescResponseData[index] == 3)
-        {
-          Serial.print(" foundEND ");
-          char buff[6 + 1] = {0};
-          if(buildGetValuesPacket(buff, 6))
-          {
-            clientUart.print( buff );
-          }
-          foundStart = false;
-          totalBytesRead = 0;
-          vescPacketLen = 0;
-          foundRPM = false;
-          continue;
-        }
-        else
-        {
-          //keep going?? this should be an error case so huh...
-          totalBytesRead += bytesRead;
-          continue;
-        }
-      }
-    }
-    totalBytesRead += bytesRead;
-  }
-  Serial.println();
-  
 }
