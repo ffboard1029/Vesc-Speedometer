@@ -338,22 +338,22 @@ void Adafruit_FeatherOLED_Custom::drawNumeral(int place, int num)
         starty -= 2;
         fillRect(startx + 2, starty, 2, 2, WHITE);
         starty -= 2;
-        fillRect(startx + 4, starty, width - 8, 2, WHITE);
+        fillRect(startx + 4, starty, width - 10, 2, WHITE);
         starty += 2;
-        fillRect(startx + width - 4, starty, 2, 2, WHITE);
+        fillRect(startx + width - 6, starty, 2, 2, WHITE);
         starty += 2;
-        fillRect(startx + width - 2, starty, 2, 8, WHITE);
+        fillRect(startx + width - 4, starty, 2, 8, WHITE);
         starty += 8;
         for(int i = 0; i < 10; i++)
         {
-            fillRect(startx + width - 3 - 1 * i, starty, 2, 2, WHITE);
+            fillRect(startx + width - 5 - 1 * i, starty, 2, 2, WHITE);
             starty += 2;
         }
-        fillRect(startx + 2, height - 2, width - 2, 2, WHITE);
+        fillRect(startx + 1, height - 2, width - 2, 2, WHITE);
     }
     else if(num == 3)
     {
-        fillRect(startx + 2, starty, width, 2, WHITE);
+        fillRect(startx + 2, starty, width - 2, 2, WHITE);
         for(int i = 0; i < 8; i++)
         {
             fillRect(startx + width - 1 - 1 * i, starty, 2, 2, WHITE);
@@ -388,12 +388,13 @@ void Adafruit_FeatherOLED_Custom::drawNumeral(int place, int num)
     else if(num == 5)
     {
         fillRect(startx, starty, width, 2, WHITE);
-        fillRect(startx, starty, 2, 10, WHITE);
-        starty += 10;
+        fillRect(startx, starty, 2, 11, WHITE);
+        starty += 11;
         fillRect(startx, starty, width - 4, 2, WHITE);
         starty += 2;
         fillRect(startx + width - 4, starty, 2, 2, WHITE);
         starty += 2;
+        //bottom of loop
         fillRect(startx + width - 2, starty, 2, height - 4 - starty, WHITE);
         starty = height - 4;
         fillRect(startx + width - 4, starty, 2, 2, WHITE);
@@ -404,6 +405,32 @@ void Adafruit_FeatherOLED_Custom::drawNumeral(int place, int num)
         starty -= 4;
         fillRect(startx, starty, 2, 4, WHITE);
 
+    }
+    else if(num == 6)
+    {
+        fillRect(startx + 6, starty, 7, 2, WHITE);
+        starty += 4;
+        for(int i = 0; i < 4; i++)
+        {
+            fillRect(startx + 1 + i * 1, starty - i * 1, 2, 2, WHITE);
+        }
+        starty += 2;
+        fillRect(startx, starty, 2, height - 10, WHITE);
+        starty += 9;
+        fillRect(startx + 2, starty, 2, 2, WHITE);
+        starty -= 2;
+        fillRect(startx + 4, starty, width - 8, 2, WHITE);
+        starty += 2;
+        fillRect(startx + width - 4, starty, 2, 2, WHITE);
+
+        starty += 2;
+        fillRect(startx + width - 2, starty, 2, height - 4 - starty, WHITE);
+        starty = height - 4;
+        fillRect(startx + width - 4, starty, 2, 2, WHITE);
+        starty += 2;
+        fillRect(startx + 4, starty, width - 8, 2, WHITE);
+        starty -= 2;
+        fillRect(startx + 2, starty, 2, 2, WHITE);
     }
     else if(num == 7)
     {
@@ -416,5 +443,56 @@ void Adafruit_FeatherOLED_Custom::drawNumeral(int place, int num)
             startx += 1; starty -= 2;
         }
         fillRect(startx - 1, 2, 2, starty, WHITE);
+    }
+    else if(num == 8)
+    {
+        starty += 2;
+        fillRect(startx + 2, starty, 2, 2, WHITE);
+        fillRect(startx + 4, starty - 2, width - 8, 2, WHITE);
+        fillRect(startx + width - 4, starty, 2, 2, WHITE);
+        starty += 2;
+        fillRect(startx, starty, 2, starty + 5, WHITE);
+        fillRect(startx + width - 2, starty, 2, starty + 5, WHITE);
+        starty += 9;
+        fillRect(startx + 2, starty, 2, 2, WHITE);
+        fillRect(startx + width - 4, starty, 2, 2, WHITE);
+        starty += 2;
+
+        fillRect(startx + 4, starty, width - 8, 2, WHITE);
+        starty += 2;
+        fillRect(startx + 2, starty, 2, 2, WHITE);
+        fillRect(startx + width - 4, starty, 2, 2, WHITE);
+
+        starty += 2;
+        fillRect(startx + width - 2, starty, 2, height - 4 - starty, WHITE);
+        fillRect(startx, starty, 2, height - 4 - starty, WHITE);
+        starty = height - 4;
+        fillRect(startx + width - 4, starty, 2, 2, WHITE);
+        starty += 2;
+        fillRect(startx + 4, starty, width - 8, 2, WHITE);
+        starty -= 2;
+        fillRect(startx + 2, starty, 2, 2, WHITE);
+    }
+    else if(num == 9)
+    {
+        starty += 2;
+        fillRect(startx + 2, starty, 2, 2, WHITE);
+        fillRect(startx + 4, starty - 2, width - 8, 2, WHITE);
+        fillRect(startx + width - 4, starty, 2, 2, WHITE);
+        starty += 2;
+        fillRect(startx, starty, 2, starty + 7, WHITE);
+        fillRect(startx + width - 2, starty, 2, starty + 18, WHITE);
+        starty += 11;
+        fillRect(startx + 2, starty, 2, 2, WHITE);
+        fillRect(startx + width - 4, starty, 2, 2, WHITE);
+        starty += 2;
+        fillRect(startx + 4, starty, width - 8, 2, WHITE);
+        starty = height - 3;
+        for(int i = 0; i < 4; i++)
+        {
+            fillRect(startx + 9 + i * 1, starty - i * 1, 2, 2, WHITE);
+        }
+        starty += 1;
+        fillRect(startx + 4, height - 2, 5, 2, WHITE);
     }
 }
