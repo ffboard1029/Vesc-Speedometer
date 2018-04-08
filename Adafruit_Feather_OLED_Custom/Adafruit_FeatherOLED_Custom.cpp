@@ -240,7 +240,7 @@ void Adafruit_FeatherOLED_Custom::setUnits ( bool imperial )
 /******************************************************************************/
 void Adafruit_FeatherOLED_Custom::setSpeed ( float speed )
 {
-    fillRect(0, 0, 70, 32, BLACK);
+    fillRect(0, 0, 71, 32, BLACK);
 
     int tens = ((int)speed) / 10;
 
