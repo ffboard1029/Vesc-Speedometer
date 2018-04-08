@@ -234,20 +234,21 @@ void bleuart_rx_callback(BLEClientUart& uart_svc)
         totalBytesRead += bytesRead;
          continue;
       }
-      //location of rpm is 25 bytes into the actual data packet, and is 4 bytes long
-      else if (totalBytesRead + bytesRead >= headerLen + 25 && !foundRPM)
+      
+      //location of erpm is 25 bytes into the actual data packet, and is 4 bytes long
+      if (totalBytesRead + bytesRead >= headerLen + 25 && !foundRPM)
       {
         foundRPM = true;
         
         int index = headerLen + 25 - totalBytesRead;
-        int rpm = (vescResponseData[index++]) << 24 | (vescResponseData[index++]) << 16 | 
-                  (vescResponseData[index++]) << 8 | (vescResponseData[index]);
-        if(rpm >= 0)
+        int erpm = (vescResponseData[index++]) << 24 | (vescResponseData[index++]) << 16 | 
+                   (vescResponseData[index++]) << 8 | (vescResponseData[index]);
         {
           oled.setSpeed(erpmToSpeed(rpm));
         }
       }
-      else if(totalBytesRead + bytesRead >= vescPacketLen + headerLen + 3)
+      
+      if(totalBytesRead + bytesRead >= vescPacketLen + headerLen + 3)
       {
         int index = vescPacketLen + headerLen + 2 - totalBytesRead;
         //found the end data
@@ -259,18 +260,16 @@ void bleuart_rx_callback(BLEClientUart& uart_svc)
           {
             clientUart.print( buff );
           }
-          foundStart = false;
-          totalBytesRead = 0;
-          vescPacketLen = 0;
-          foundRPM = false;
-          continue;
         }
         else
         {
-          //keep going?? this should be an error case so huh...
-          totalBytesRead += bytesRead;
-          continue;
         }
+        //reset our values for the next packet
+        foundStart = false;
+        totalBytesRead = 0;
+        vescPacketLen = 0;
+        foundRPM = false;
+        continue;
       }
     }
     totalBytesRead += bytesRead;
