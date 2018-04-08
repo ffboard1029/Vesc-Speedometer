@@ -38,6 +38,7 @@ SOFTWARE.
 #define VBAT_DIVIDER      (0.71275837F)   // 2M + 0.806M voltage divider on VBAT = (2M / (0.806M + 2M))
 #define VBAT_DIVIDER_COMP (1.403F)        // Compensation factor for the VBAT divider
 
+#define UNITS_BUTTON_PIN      27
 //for calculating speed from rpm
 #define DISPLAY_IMPERIAL_UNITS true   //true for mph on display, false for kmh (can still be toggled with the button)
 #define WHEEL_DIAMETER     90    //in mm EVEN WHEN USING IMPERIAL UNITS!!!!
@@ -51,6 +52,7 @@ BLEClientDis  clientDis;
 BLEClientUart clientUart;
 bool _imperial;
 bool _sendNewRequest;
+int _lastButtonState;
 
 int readVBAT(void) 
 {
@@ -80,6 +82,7 @@ void setup() {
   
   _imperial = DISPLAY_IMPERIAL_UNITS;
   _sendNewRequest = true;
+  _lastButtonState = 0;
   
   bleCentralSetup();
 
@@ -89,11 +92,35 @@ void setup() {
   oled.setUnits(_imperial);
   oled.display();
 
+  pinMode(UNITS_BUTTON_PIN, INPUT_PULLUP);
   pinMode(VBAT_PIN, INPUT);
   readVBAT();
 }
 
-void loop() {
+void loop() 
+{
+  int button = digitalRead(UNITS_BUTTON_PIN);
+  if (button != _lastButtonState)
+  {
+    if(button == LOW)
+    {
+      _imperial = !_imperial;
+      oled.setUnits(_imperial);
+    }
+  }
+  _lastButtonState = button;
+
+
+  // Get a raw ADC reading
+  int vbat_raw = readVBAT();
+
+  // Convert the raw value to compensated mv, taking the resistor-
+  // divider into account (providing the actual LIPO voltage)
+  // ADC range is 0..3000mV and resolution is 12-bit (0..4095),
+  // VBAT voltage divider is 2M + 0.806M, which needs to be added back
+  float vbat_mv = (float)vbat_raw * VBAT_MV_PER_LSB * VBAT_DIVIDER_COMP;
+
+  oled.setBattery(vbat_mv/1000);
   
   if ( Bluefruit.Central.connected() && clientUart.discovered())
   {
@@ -108,26 +135,16 @@ void loop() {
         _sendNewRequest = false;
       }
     }
+    delay(1000);
   }
   else
   {
     _sendNewRequest = true;
     oled.setSpeed(0);
     oled.setConnected(false);
+    oled.display();
+    delay(400);
   }
-  // Get a raw ADC reading
-  int vbat_raw = readVBAT();
-
-  // Convert the raw value to compensated mv, taking the resistor-
-  // divider into account (providing the actual LIPO voltage)
-  // ADC range is 0..3000mV and resolution is 12-bit (0..4095),
-  // VBAT voltage divider is 2M + 0.806M, which needs to be added back
-  float vbat_mv = (float)vbat_raw * VBAT_MV_PER_LSB * VBAT_DIVIDER_COMP;
-
-  oled.setBattery(vbat_mv/1000);
-  oled.display();
-
-  delay(200);
 }
 
 float erpmToSpeed(int erpm)
@@ -140,10 +157,11 @@ float erpmToSpeed(int erpm)
   }
   else
   {
-    return mmph / 1000000.0f;  
+    return mmph / 1000000.0f;  //mm to km
   }
 }
 
+//not even sure why I passed a length here, it's constant size
 bool buildGetValuesPacket(char * buff, int len)
 {
   if(len < 6)
