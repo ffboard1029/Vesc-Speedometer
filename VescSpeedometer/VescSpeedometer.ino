@@ -33,6 +33,9 @@ SOFTWARE.
 #include <bluefruit.h>
 #include <crc.h>
 
+//0 for no printing to console, 1 for normal info, 2 for extra info, 3 for entire vesc packet to be printed
+#define DEBUG_LEVEL       0
+
 #define VBAT_PIN          (A7)
 #define VBAT_MV_PER_LSB   (0.73242188F)   // 3.0V ADC range and 12-bit ADC resolution = 3000mV/4096
 #define VBAT_DIVIDER      (0.71275837F)   // 2M + 0.806M voltage divider on VBAT = (2M / (0.806M + 2M))
@@ -77,8 +80,12 @@ int readVBAT(void)
   return raw;
 }
 
-void setup() {
-  Serial.begin(9600);
+void setup() 
+{
+  if(DEBUG_LEVEL)
+  {
+    Serial.begin(9600);
+  }
   
   _imperial = DISPLAY_IMPERIAL_UNITS;
   _sendNewRequest = true;
@@ -140,7 +147,7 @@ void loop()
   else
   {
     _sendNewRequest = true;
-    oled.setSpeed(0);
+    oled.setSpeed(erpmToSpeed(0));
     oled.setConnected(false);
     oled.display();
     delay(400);
@@ -192,21 +199,26 @@ bool foundRPM = false;
 void bleuart_rx_callback(BLEClientUart& uart_svc)
 {
   uint8_t vescResponseData[64] = {0};
-  Serial.print("[RX]: ");
+  if(DEBUG_LEVEL)
+  {
+    Serial.print("[Data Received]: ");
+  }
   
   while ( uart_svc.available() )
   {
     
     int bytesRead = uart_svc.read(vescResponseData, 64);
-    Serial.print("bytes read: ");
-    Serial.print(bytesRead);
+    if(DEBUG_LEVEL)
+    {
+      Serial.print("Num bytes read: ");
+      Serial.print(bytesRead);
+    }
     if(!foundStart)
     {
       if(vescResponseData[0] == 2)
       {
-        Serial.print(" len:");
         vescPacketLen = vescResponseData[1];
-        Serial.print(vescPacketLen);
+
         foundStart = true;
       }
       else if(vescResponseData[0] == 3)
@@ -216,9 +228,28 @@ void bleuart_rx_callback(BLEClientUart& uart_svc)
       }
       else
       {
-        Serial.print(" not vesc data?? or some other error...... :/");
+        if(DEBUG_LEVEL)
+        {
+          Serial.print(" not vesc data?? or some other error...... :/");
+        }
         totalBytesRead += bytesRead;
         continue;
+      }
+      
+      if(DEBUG_LEVEL == 2)
+      {
+        Serial.print(" Vesc Data length:");
+        Serial.print(vescPacketLen);
+      }
+    }
+
+    if(DEBUG_LEVEL == 3)
+    {
+      for(int i = 0; i < bytesRead; i++)
+      {
+        Serial.print(" [");
+        Serial.print(vescResponseData[i]);
+        Serial.print("]");
       }
     }
 
@@ -243,8 +274,19 @@ void bleuart_rx_callback(BLEClientUart& uart_svc)
         int index = headerLen + 25 - totalBytesRead;
         int erpm = (vescResponseData[index++]) << 24 | (vescResponseData[index++]) << 16 | 
                    (vescResponseData[index++]) << 8 | (vescResponseData[index]);
+                   
+        if(DEBUG_LEVEL == 2)
         {
-          oled.setSpeed(erpmToSpeed(rpm));
+          Serial.print(" erpm: ");
+          Serial.print(erpm);
+          Serial.print(" speed: ");
+          Serial.print(erpmToSpeed(erpm));
+        }
+        
+        if(erpm >= 0)
+        {
+          oled.setSpeed(erpmToSpeed(erpm));
+          oled.display();
         }
       }
       
@@ -254,7 +296,10 @@ void bleuart_rx_callback(BLEClientUart& uart_svc)
         //found the end data
         if(vescResponseData[index] == 3)
         {
-          Serial.print(" foundEND ");
+          if(DEBUG_LEVEL == 2)
+          {
+            Serial.print(" Found packet end ");
+          }
           char buff[6 + 1] = {0};
           if(buildGetValuesPacket(buff, 6))
           {
@@ -263,6 +308,10 @@ void bleuart_rx_callback(BLEClientUart& uart_svc)
         }
         else
         {
+          if(DEBUG_LEVEL)
+          {
+            Serial.print(" this should be an error case so huh... clear everything");
+          }
         }
         //reset our values for the next packet
         foundStart = false;
@@ -274,7 +323,10 @@ void bleuart_rx_callback(BLEClientUart& uart_svc)
     }
     totalBytesRead += bytesRead;
   }
-  Serial.println();
+  if(DEBUG_LEVEL)
+  {
+    Serial.println();
+  }
 }
 
 /*********************************************************************
@@ -335,7 +387,10 @@ void scan_callback(ble_gap_evt_adv_report_t* report)
   // Check if advertising contain BleUart service
   if ( Bluefruit.Scanner.checkReportForService(report, clientUart) )
   {
-    Serial.print("BLE UART service detected. Connecting ... ");
+    if(DEBUG_LEVEL)
+    {
+      Serial.print("BLE UART service detected. Connecting ... ");
+    }
 
     // Connect to device with bleuart service in advertising
     Bluefruit.Central.connect(report);
@@ -348,17 +403,23 @@ void scan_callback(ble_gap_evt_adv_report_t* report)
  */
 void connect_callback(uint16_t conn_handle)
 {
-  Serial.println("Connected");
+  if(DEBUG_LEVEL)
+  {
+    Serial.println("Connected");
 
-  Serial.print("Dicovering DIS ... ");
+    Serial.print("Dicovering DIS ... ");
+  }
   if ( clientDis.discover(conn_handle) )
   {
-    Serial.println("Found it");
+    if(DEBUG_LEVEL)
+    { 
+      Serial.println("Found it");
+    }
     char buffer[32+1];
     
     // read and print out Manufacturer
     memset(buffer, 0, sizeof(buffer));
-    if ( clientDis.getManufacturer(buffer, sizeof(buffer)) )
+    if ( clientDis.getManufacturer(buffer, sizeof(buffer)) && DEBUG_LEVEL )
     {
       Serial.print("Manufacturer: ");
       Serial.println(buffer);
@@ -366,28 +427,44 @@ void connect_callback(uint16_t conn_handle)
 
     // read and print out Model Number
     memset(buffer, 0, sizeof(buffer));
-    if ( clientDis.getModel(buffer, sizeof(buffer)) )
+    if ( clientDis.getModel(buffer, sizeof(buffer)) && DEBUG_LEVEL )
     {
       Serial.print("Model: ");
       Serial.println(buffer);
     }
 
-    Serial.println();
+    if(DEBUG_LEVEL)
+    {
+      Serial.println();
+    }
   }  
 
-  Serial.print("Discovering BLE Uart Service ... ");
+  if(DEBUG_LEVEL)
+  {
+    Serial.print("Discovering BLE Uart Service ... ");
+  }
 
   if ( clientUart.discover(conn_handle) )
   {
-    Serial.println("Found it");
+    if(DEBUG_LEVEL)
+    {
+      Serial.println("Found it");
+    
 
-    Serial.println("Enable TXD's notify");
+      Serial.println("Enable TXD's notify");
+    }
     clientUart.enableTXD();
 
-    Serial.println("Ready to receive from peripheral");
+    if(DEBUG_LEVEL)
+    {
+      Serial.println("Ready to receive from peripheral");
+    }
   }else
   {
-    Serial.println("Found NONE");
+    if(DEBUG_LEVEL)
+    {
+      Serial.println("Found NONE");
+    }
     
     // disconect since we couldn't find bleuart service
     Bluefruit.Central.disconnect(conn_handle);
@@ -403,6 +480,8 @@ void disconnect_callback(uint16_t conn_handle, uint8_t reason)
 {
   (void) conn_handle;
   (void) reason;
-  
-  Serial.println("Disconnected");
+  if(DEBUG_LEVEL)
+  {
+    Serial.println("Disconnected");
+  }
 }
