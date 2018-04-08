@@ -493,6 +493,6 @@ void Adafruit_FeatherOLED_Custom::drawNumeral(int place, int num)
             fillRect(startx + 9 + i * 1, starty - i * 1, 2, 2, WHITE);
         }
         starty += 1;
-        fillRect(startx + 4, height - 2, 5, 2, WHITE);
+        fillRect(startx + 3, height - 2, 6, 2, WHITE);
     }
 }
