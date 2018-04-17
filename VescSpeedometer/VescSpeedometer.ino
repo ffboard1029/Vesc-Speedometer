@@ -49,8 +49,13 @@ SOFTWARE.
 
 #define COMM_GET_VALUES   4   //vesc uart command to get values
 
+//MUST configure this, can be found from BLDC Tool
+#define VESC_MAJOR_VERSION 3
+#define VESC_MINOR_VERSION 0
+
 Adafruit_FeatherOLED_Custom  oled = Adafruit_FeatherOLED_Custom();
 
+int _rpmLocation;
 BLEClientDis  clientDis;
 BLEClientUart clientUart;
 bool _imperial;
@@ -85,6 +90,15 @@ void setup()
   if(DEBUG_LEVEL)
   {
     Serial.begin(9600);
+  }
+
+  if(VESC_MAJOR_VERSION >= 3 && VESC_MINOR_VERSION >= 7)
+  {
+    _rpmLocation = 23;
+  }
+  else
+  {
+    _rpmLocation = 25;
   }
   
   _imperial = DISPLAY_IMPERIAL_UNITS;
@@ -266,12 +280,12 @@ void bleuart_rx_callback(BLEClientUart& uart_svc)
          continue;
       }
       
-      //location of erpm is 25 bytes into the actual data packet, and is 4 bytes long
-      if (totalBytesRead + bytesRead >= headerLen + 25 && !foundRPM)
+      //location of erpm is _rpmLocation bytes into the actual data packet, and is 4 bytes long
+      if (totalBytesRead + bytesRead >= headerLen + _rpmLocation && !foundRPM)
       {
         foundRPM = true;
         
-        int index = headerLen + 25 - totalBytesRead;
+        int index = headerLen + _rpmLocation - totalBytesRead;
         int erpm = (vescResponseData[index++]) << 24 | (vescResponseData[index++]) << 16 | 
                    (vescResponseData[index++]) << 8 | (vescResponseData[index]);
                    
